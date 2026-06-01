@@ -1,0 +1,34 @@
+{
+  "skill_name": "session-start",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "ok let's pick up where we left off — what were we doing?",
+      "expected_output": "Finds the newest {month}/{month}{day}/handover-session-*.md, reads it, loads the .md files it lists, and gives a short orientation (where we left off + the open next steps) without re-scanning the whole repo.",
+      "files": [],
+      "assertions": [
+        { "text": "Reads the most recent handover file under a {month}/{month}{day}/ folder", "passed": null, "evidence": "" },
+        { "text": "Reads the files named in the handover's 'load into context' list (not just the handover)", "passed": null, "evidence": "" },
+        { "text": "Surfaces the handover's next-steps and where-we-left-off, and waits for direction rather than starting large changes", "passed": null, "evidence": "" }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "start session",
+      "expected_output": "Loads the latest handover + its context files and orients, even though the user gave only a terse trigger.",
+      "files": [],
+      "assertions": [
+        { "text": "Locates and reads the latest handover", "passed": null, "evidence": "" }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "open june/june01/handover-session-1.md and fix the typo in the title",
+      "expected_output": "Treats this as a direct file edit, NOT a session-start orientation — a near-miss that names a handover file but asks for an edit, not to resume work.",
+      "files": [],
+      "assertions": [
+        { "text": "Edits the named file directly and does not run the full load-handover-into-context orientation flow", "passed": null, "evidence": "" }
+      ]
+    }
+  ]
+}

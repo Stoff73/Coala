@@ -1,0 +1,114 @@
+// CoALA Agent Builder — persistence (PLAN §6b).
+// SQLite for local dev; schema is Postgres-portable (the blueprint is stored as
+// JSON *text*, so switching `provider` to "postgresql" needs no model changes).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  sessions    Session[]
+  blueprints  Blueprint[]       @relation("owner")
+  memberships WorkspaceMember[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  personal  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  members    WorkspaceMember[]
+  blueprints Blueprint[]
+  invites    WorkspaceInvite[]
+}
+
+model WorkspaceInvite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String
+  role        String    @default("member") // admin | member
+  invitedById String
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, email])
+  @@index([email])
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String    @default("member") // owner | admin | member
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Blueprint {
+  id          String     @id @default(cuid())
+  name        String
+  ownerId     String
+  owner       User       @relation("owner", fields: [ownerId], references: [id], onDelete: Cascade)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  agent       String // canonical CoALA Blueprint, JSON-encoded
+  version     Int        @default(1)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  versions BlueprintVersion[]
+  shares   BlueprintShare[]
+
+  @@index([ownerId])
+  @@index([workspaceId])
+}
+
+// Linear version history (PLAN §10 — linear, no branching for v1).
+model BlueprintVersion {
+  id          String    @id @default(cuid())
+  blueprintId String
+  blueprint   Blueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  version     Int
+  agent       String
+  createdAt   DateTime  @default(now())
+
+  @@unique([blueprintId, version])
+}
+
+model BlueprintShare {
+  id          String    @id @default(cuid())
+  blueprintId String
+  blueprint   Blueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  role        String    @default("view") // view | edit
+  createdAt   DateTime  @default(now())
+
+  @@index([blueprintId])
+}

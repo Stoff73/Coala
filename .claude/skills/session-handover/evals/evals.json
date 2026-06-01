@@ -1,0 +1,36 @@
+{
+  "skill_name": "session-handover",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "ok I'm going to /clear in a minute — can you write up where we are so the next session picks up cleanly? We just finished real embedding retrieval and the memory editors.",
+      "expected_output": "A handover markdown file written under a {month}/{month}{day}/ folder (e.g. june/june01/handover-session-1.md) containing all five sections: what was done, what remains, next steps (as a checklist), relevant files, and the .md files to load into context first.",
+      "files": [],
+      "assertions": [
+        { "text": "Writes a handover file under a {month}/{month}{day}/ folder matching <month>/<month><dd>/handover-session-<n>.md", "passed": null, "evidence": "" },
+        { "text": "Handover contains all five required sections (what was done, what remains, next steps, relevant files, load-into-context list)", "passed": null, "evidence": "" },
+        { "text": "Next-steps section is an actionable checklist (contains '- [ ]' items)", "passed": null, "evidence": "" },
+        { "text": "Load-into-context list references at least one .md file with a reason", "passed": null, "evidence": "" }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "let's wrap up for today",
+      "expected_output": "Recognizes the session is ending and writes a dated handover with the five sections, even though the user didn't say 'handover'.",
+      "files": [],
+      "assertions": [
+        { "text": "Writes a handover file under a {month}/{month}{day}/ folder", "passed": null, "evidence": "" },
+        { "text": "Handover includes a next-steps action checklist and a load-into-context .md list", "passed": null, "evidence": "" }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "can you write a conventional-commit message for the changes I just made to the auth routes?",
+      "expected_output": "Does NOT write a session handover — this is a commit message request, a near-miss that shares 'changes/just made' but is not a session ending.",
+      "files": [],
+      "assertions": [
+        { "text": "Does not create a handover file or a {month}/{month}{day}/ folder", "passed": null, "evidence": "" }
+      ]
+    }
+  ]
+}

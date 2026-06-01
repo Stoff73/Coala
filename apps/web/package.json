@@ -1,0 +1,42 @@
+{
+  "name": "@coala/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CoALA Agent Builder — Next.js designer UI",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@coala/core": "*",
+    "@coala/export": "*",
+    "@coala/inference": "*",
+    "@coala/providers": "*",
+    "@coala/runtime": "*",
+    "@prisma/client": "^5.18.0",
+    "bcryptjs": "^2.4.3",
+    "jszip": "^3.10.1",
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.39",
+    "prisma": "^5.18.0",
+    "tailwindcss": "^3.4.7",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}

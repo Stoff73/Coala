@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.tsbuildinfo
+
+# secrets — BYO-key via .env (PLAN §6b); never commit
+.env
+.env.*
+!.env.example
+
+# os / editor
+.DS_Store
+*.log
+
+# test / tooling artifacts
+.playwright-mcp/
+board-*.png
+
+# local sqlite db (Prisma migrations ARE committed)
+*.db
+*.db-journal
+
+# transient tooling state (not project source)
+.remember/
+.claude/skills/*-workspace/
