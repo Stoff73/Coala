@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Agent } from "@coala/core";
 import { MEMORY_KIND_META } from "../../lib/types";
 import { applyGrant } from "../../lib/blueprint-edit";
@@ -30,6 +30,11 @@ export function MemoryScreen({
 }) {
   const focusIdx = agent.memoryModules.findIndex((m) => m.id === focusModuleId);
   const [sel, setSel] = useState(focusIdx >= 0 ? focusIdx : 0);
+  // Re-sync selection if a deep-link arrives while the screen is already mounted.
+  useEffect(() => {
+    if (focusIdx >= 0) setSel(focusIdx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusModuleId]);
   const idx = Math.min(sel, agent.memoryModules.length - 1);
   const m = agent.memoryModules[idx];
 

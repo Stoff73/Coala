@@ -17,28 +17,38 @@ export interface HealthSummary {
   byConcern: Record<Concern, boolean>; // true = some finding (error or warning) touches this concern
 }
 
-/** Map a finding's dotted `path` to the concern screen it belongs to. */
-function concernForPath(path: string | undefined): Concern | null {
-  if (!path) return null;
-  if (path.startsWith("memoryModules") || path.startsWith("accessPolicy")) return "memory";
-  if (path.startsWith("groundingInterfaces")) return "act";
-  if (path.startsWith("decisionProcedure")) return "decision";
-  return null;
+/** Map a finding's dotted `path` to the concern screen(s) it belongs to. */
+function concernsForPath(path: string | undefined): Concern[] {
+  if (!path) return [];
+  if (path.startsWith("memoryModules") || path.startsWith("accessPolicy")) return ["memory"];
+  if (path.startsWith("groundingInterfaces")) {
+    // A whole-system "no grounding" finding (bare path) affects both input and output;
+    // interface/tool-specific findings are about acting.
+    return path === "groundingInterfaces" ? ["perceive", "act"] : ["act"];
+  }
+  if (path.startsWith("decisionProcedure")) return ["decision"];
+  return [];
 }
 
 /** Translate lint findings into a plain-language health summary for the System Map. */
 export function summarizeHealth(agent: Agent): HealthSummary {
-  const items: HealthItem[] = lintAgent(agent).findings.map((f: Finding) => ({
+  const raw = lintAgent(agent).findings.map((f: Finding) => ({
     message: f.message,
     severity: f.severity,
-    concern: concernForPath(f.path),
+    concerns: concernsForPath(f.path),
+  }));
+
+  const items: HealthItem[] = raw.map((r) => ({
+    message: r.message,
+    severity: r.severity,
+    concern: r.concerns[0] ?? null,
   }));
 
   const errors = items.filter((i) => i.severity === "error").length;
   const warnings = items.filter((i) => i.severity === "warning").length;
 
   const byConcern: Record<Concern, boolean> = { memory: false, perceive: false, act: false, decision: false };
-  for (const i of items) if (i.concern) byConcern[i.concern] = true;
+  for (const r of raw) for (const c of r.concerns) byConcern[c] = true;
 
   const status: "ok" | "attention" = errors > 0 ? "attention" : "ok";
   const headline =

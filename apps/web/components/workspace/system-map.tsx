@@ -10,8 +10,9 @@ type Go = (screen: "memory" | "perceive" | "decision" | "act" | "test" | "export
 function Dot({ on }: { on: boolean }) {
   return (
     <span
+      role="img"
+      aria-label={on ? "needs attention" : "ok"}
       className={`inline-block h-2 w-2 rounded-full ${on ? "bg-amber-400" : "bg-emerald-500"}`}
-      aria-hidden
     />
   );
 }
