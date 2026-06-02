@@ -8,13 +8,15 @@ import { BlueprintBoard, type Update } from "../board";
 import { SystemMap } from "./system-map";
 import { ScreenFrame } from "./screen-frame";
 import { MemoryScreen } from "./memory-screen";
+import { PerceiveScreen } from "./perceive-screen";
+import { ActScreen } from "./act-screen";
+import { DecisionScreen } from "./decision-screen";
 
 export type Screen = "map" | "memory" | "perceive" | "act" | "decision" | "test" | "export" | "board";
 
 export function AgentWorkspace({ result, onChange }: { result: BlueprintResult; onChange?: (agent: Agent) => void }) {
   const [agent, setAgent] = useState<Agent>(result.agent);
   const [screen, setScreen] = useState<Screen>("map");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [focusModuleId, setFocusModuleId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -46,6 +48,9 @@ export function AgentWorkspace({ result, onChange }: { result: BlueprintResult; 
   if (screen === "memory") {
     return <MemoryScreen agent={agent} update={update} focusModuleId={focusModuleId} onBack={back} />;
   }
+  if (screen === "perceive") return <PerceiveScreen agent={agent} update={update} onBack={back} />;
+  if (screen === "act") return <ActScreen agent={agent} update={update} onBack={back} />;
+  if (screen === "decision") return <DecisionScreen agent={agent} update={update} onBack={back} />;
   if (screen !== "map") {
     // TEMPORARY stub — replaced by real screens in later tasks.
     return (
