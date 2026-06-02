@@ -95,7 +95,7 @@ export function SystemMap({
         <Node emoji="👂" label="Perceive" summary="what it receives" attention={att("perceive")} onClick={() => navigate("perceive")} />
         <span className="opacity-40">→</span>
         <div className="rounded-xl border-2 border-indigo-500 bg-indigo-500/10 p-3 text-center">
-          <button onClick={() => navigate("memory")} className="text-2xl">🧠</button>
+          <button onClick={() => navigate("memory")} aria-label="Open Memory" className="text-2xl">🧠</button>
           <div className="mt-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-slate-100">
             Memory <Dot on={att("memory")} />
           </div>
