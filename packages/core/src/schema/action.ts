@@ -33,7 +33,7 @@ export const DigitalTool = z.object({
   description: z.string().default(""),
   /** Argument schema for the tool call, when defined. */
   inputSchema: RecordSchema.optional(),
-  /** Side-effect class; drives the destructive-tool safety warning (§6). Unset → inferred. */
+  /** Side-effect class; drives the destructive-tool safety warning (§6). */
   sideEffect: SideEffect.optional(),
 });
 export type DigitalTool = z.infer<typeof DigitalTool>;

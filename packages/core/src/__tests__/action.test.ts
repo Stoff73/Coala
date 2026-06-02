@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DigitalTool } from "../schema/action.js";
 
 describe("DigitalTool.sideEffect", () => {
-  it("accepts a valid side-effect class", () => {
-    const t = DigitalTool.parse({ name: "deleteRecord", sideEffect: "destructive" });
-    expect(t.sideEffect).toBe("destructive");
+  it.each(["read", "write", "destructive"] as const)("accepts the %s side-effect class", (effect) => {
+    const t = DigitalTool.parse({ name: "tool", sideEffect: effect });
+    expect(t.sideEffect).toBe(effect);
   });
 
   it("leaves sideEffect undefined when omitted", () => {
