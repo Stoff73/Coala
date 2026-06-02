@@ -524,6 +524,23 @@ function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
                   <div key={ti} className="mb-1 flex items-center gap-1">
                     <Input value={t.name} mono onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.name = v))} className="w-40" />
                     <Input value={t.description} onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.description = v))} className="flex-1" placeholder="description" />
+                    <select
+                      value={t.sideEffect ?? ""}
+                      title="Side-effect class (drives the destructive-tool safety warning)"
+                      onChange={(e) =>
+                        update((d) => {
+                          const v = e.target.value;
+                          d.groundingInterfaces[gidx]!.digitalTools[ti]!.sideEffect =
+                            v === "" ? undefined : (v as "read" | "write" | "destructive");
+                        })
+                      }
+                      className="rounded border border-slate-700 bg-slate-950 px-1 py-1 text-xs outline-none focus:border-indigo-500"
+                    >
+                      <option value="">effect…</option>
+                      <option value="read">read</option>
+                      <option value="write">write</option>
+                      <option value="destructive">destructive</option>
+                    </select>
                     <IconBtn title="Remove tool" onClick={() => update((d) => d.groundingInterfaces[gidx]!.digitalTools.splice(ti, 1))}>✕</IconBtn>
                   </div>
                 ))}
