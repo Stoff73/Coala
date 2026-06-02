@@ -7,6 +7,7 @@ import { summarizeHealth } from "../../lib/health";
 import { BlueprintBoard, type Update } from "../board";
 import { SystemMap } from "./system-map";
 import { ScreenFrame } from "./screen-frame";
+import { MemoryScreen } from "./memory-screen";
 
 export type Screen = "map" | "memory" | "perceive" | "act" | "decision" | "test" | "export" | "board";
 
@@ -41,6 +42,9 @@ export function AgentWorkspace({ result, onChange }: { result: BlueprintResult; 
         <BlueprintBoard result={result} agent={agent} update={update} />
       </ScreenFrame>
     );
+  }
+  if (screen === "memory") {
+    return <MemoryScreen agent={agent} update={update} focusModuleId={focusModuleId} onBack={back} />;
   }
   if (screen !== "map") {
     // TEMPORARY stub — replaced by real screens in later tasks.
