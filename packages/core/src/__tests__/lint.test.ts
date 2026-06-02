@@ -75,4 +75,45 @@ describe("CoALA invariants", () => {
   it("a clean preset reports ok", () => {
     expect(lintAgent(reactAgent).ok).toBe(true);
   });
+
+  it("warns (heuristic) on an untagged tool whose name looks destructive", () => {
+    const a = mutate((x) => {
+      x.groundingInterfaces[0]!.type = "digital";
+      x.groundingInterfaces[0]!.digitalTools = [
+        { name: "delete_record", description: "" },
+      ];
+    });
+    const f = lintAgent(a).findings;
+    expect(f.some((x) => x.rule === "destructive-tool-safety" && x.severity === "warning")).toBe(true);
+  });
+
+  it("warns on a tool explicitly tagged destructive", () => {
+    const a = mutate((x) => {
+      x.groundingInterfaces[0]!.type = "digital";
+      x.groundingInterfaces[0]!.digitalTools = [
+        { name: "ship", description: "Send the order", sideEffect: "destructive" },
+      ];
+    });
+    expect(ruleNames(a)).toContain("destructive-tool-safety");
+  });
+
+  it("does NOT warn when a destructive-looking tool is explicitly tagged read", () => {
+    const a = mutate((x) => {
+      x.groundingInterfaces[0]!.type = "digital";
+      x.groundingInterfaces[0]!.digitalTools = [
+        { name: "remove_filter", description: "remove a UI filter (no external effect)", sideEffect: "read" },
+      ];
+    });
+    expect(ruleNames(a)).not.toContain("destructive-tool-safety");
+  });
+
+  it("does NOT warn on an innocuous untagged tool", () => {
+    const a = mutate((x) => {
+      x.groundingInterfaces[0]!.type = "digital";
+      x.groundingInterfaces[0]!.digitalTools = [
+        { name: "searchCatalog", description: "Search products" },
+      ];
+    });
+    expect(ruleNames(a)).not.toContain("destructive-tool-safety");
+  });
 });

@@ -162,6 +162,52 @@ const safetyFlags: Rule = (agent) => {
   return findings;
 };
 
+/**
+ * External-action-space safety (§6). A "destructive" digital tool may have irreversible
+ * effects on the world (the paper names "rm" in a bash terminal as an example). Warn when a
+ * tool is declared destructive, or — when untagged — when its name/description matches a
+ * destructive verb. An explicit read/write tag suppresses the heuristic.
+ */
+const DESTRUCTIVE_VERBS = [
+  "delete", "remove", "drop", "purge", "destroy", "wipe", "erase", "truncate",
+  "overwrite", "terminate", "uninstall", "revoke", "transfer", "pay", "charge",
+  "refund", "deploy",
+] as const;
+
+// Letter-only lookarounds so "delete_record" / "deleteRecord" match but "undeleted" does not.
+const DESTRUCTIVE_RE = new RegExp(`(?<![a-z])(${DESTRUCTIVE_VERBS.join("|")})(?![a-z])`);
+
+const destructiveToolSafety: Rule = (agent) => {
+  const findings: Finding[] = [];
+  agent.groundingInterfaces.forEach((gi, gidx) => {
+    if (gi.type !== "digital") return;
+    gi.digitalTools.forEach((tool, tidx) => {
+      const path = `groundingInterfaces[${gidx}].digitalTools[${tidx}]`;
+      if (tool.sideEffect === "destructive") {
+        findings.push({
+          rule: "destructive-tool-safety",
+          severity: "warning",
+          message: `Tool "${tool.name}" is declared destructive — its effects on the world may be irreversible (the paper names "rm" in a bash terminal as an example). Confirm the decision procedure gates it (§6).`,
+          path,
+        });
+        return;
+      }
+      // Explicit read/write tag means the designer has classified it — trust them.
+      if (tool.sideEffect) return;
+      const match = DESTRUCTIVE_RE.exec(`${tool.name} ${tool.description}`.toLowerCase());
+      if (match) {
+        findings.push({
+          rule: "destructive-tool-safety",
+          severity: "warning",
+          message: `Tool "${tool.name}" looks destructive (matched "${match[1]}"). Tag its side-effect (read / write / destructive) to confirm or silence this (§4.2, §6).`,
+          path,
+        });
+      }
+    });
+  });
+  return findings;
+};
+
 /** Long-term stores benefit from a defined record schema (the "memory model"). */
 const ltmShouldHaveSchema: Rule = (agent) =>
   agent.memoryModules
@@ -209,6 +255,7 @@ const RULES: Rule[] = [
   groundingRequired,
   accessIntegrity,
   safetyFlags,
+  destructiveToolSafety,
   ltmShouldHaveSchema,
   actionSpaceVsDecision,
 ];
