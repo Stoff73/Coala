@@ -174,7 +174,7 @@ const DESTRUCTIVE_VERBS = [
   "refund", "deploy",
 ] as const;
 
-// Letter-only lookarounds so "delete_record" / "deleteRecord" match but "undeleted" does not.
+// Letter-only lookarounds match whole verbs (delete_record / "delete record") but not substrings (undeleted).
 const DESTRUCTIVE_RE = new RegExp(`(?<![a-z])(${DESTRUCTIVE_VERBS.join("|")})(?![a-z])`);
 
 const destructiveToolSafety: Rule = (agent) => {
@@ -194,7 +194,9 @@ const destructiveToolSafety: Rule = (agent) => {
       }
       // Explicit read/write tag means the designer has classified it — trust them.
       if (tool.sideEffect) return;
-      const match = DESTRUCTIVE_RE.exec(`${tool.name} ${tool.description}`.toLowerCase());
+      // Split camelCase (deleteRecord → "delete Record") so camelCase tool names match too.
+      const haystack = `${tool.name} ${tool.description}`.replace(/([A-Z])/g, " $1").toLowerCase();
+      const match = DESTRUCTIVE_RE.exec(haystack);
       if (match) {
         findings.push({
           rule: "destructive-tool-safety",

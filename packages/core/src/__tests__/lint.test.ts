@@ -87,6 +87,16 @@ describe("CoALA invariants", () => {
     expect(f.some((x) => x.rule === "destructive-tool-safety" && x.severity === "warning")).toBe(true);
   });
 
+  it("warns (heuristic) on an untagged tool whose camelCase name looks destructive", () => {
+    const a = mutate((x) => {
+      x.groundingInterfaces[0]!.type = "digital";
+      x.groundingInterfaces[0]!.digitalTools = [
+        { name: "deleteRecord", description: "" },
+      ];
+    });
+    expect(ruleNames(a)).toContain("destructive-tool-safety");
+  });
+
   it("warns on a tool explicitly tagged destructive", () => {
     const a = mutate((x) => {
       x.groundingInterfaces[0]!.type = "digital";
