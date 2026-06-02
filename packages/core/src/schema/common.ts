@@ -17,6 +17,13 @@ export const LONG_TERM_KINDS = ["episodic", "semantic", "procedural"] as const;
 export const GroundingType = z.enum(["dialogue", "physical", "digital"]);
 export type GroundingType = z.infer<typeof GroundingType>;
 
+/**
+ * Side-effect class of an external digital tool (paper §6, "safety of the action space").
+ * Drives the destructive-tool safety warning. Unset → the linter infers from name/description.
+ */
+export const SideEffect = z.enum(["read", "write", "destructive"]);
+export type SideEffect = z.infer<typeof SideEffect>;
+
 /** Retrieval strategies for reading LTM into working memory (paper §4.3). */
 export const RetrievalMethod = z.enum([
   "recency",
