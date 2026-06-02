@@ -798,25 +798,34 @@ export function ExportBar({ agent }: { agent: Agent }) {
 export function BlueprintBoard({
   result,
   onChange,
+  agent: agentProp,
+  update: updateProp,
 }: {
   result: BlueprintResult;
   onChange?: (agent: Agent) => void;
+  agent?: Agent;
+  update?: Update;
 }) {
-  const [agent, setAgent] = useState<Agent>(result.agent);
+  const parented = agentProp !== undefined && updateProp !== undefined;
+  const [ownAgent, setOwnAgent] = useState<Agent>(result.agent);
+  const agent = parented ? agentProp! : ownAgent;
   const [advanced, setAdvanced] = useState(false);
 
-  // Surface the live, edited agent to the parent (for Save/Share).
+  // Standalone only: surface the live, edited agent to the parent (for Save/Share).
+  // When parented, the parent owns state and onChange.
   useEffect(() => {
-    onChange?.(agent);
+    if (!parented) onChange?.(ownAgent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent]);
+  }, [ownAgent, parented]);
 
-  const update: Update = (fn) =>
-    setAgent((prev) => {
-      const next = structuredClone(prev);
-      fn(next);
-      return next;
-    });
+  const update: Update = parented
+    ? updateProp!
+    : (fn) =>
+        setOwnAgent((prev) => {
+          const next = structuredClone(prev);
+          fn(next);
+          return next;
+        });
 
   return (
     <div className="space-y-5">
