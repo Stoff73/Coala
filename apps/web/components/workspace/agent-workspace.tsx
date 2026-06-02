@@ -11,6 +11,8 @@ import { MemoryScreen } from "./memory-screen";
 import { PerceiveScreen } from "./perceive-screen";
 import { ActScreen } from "./act-screen";
 import { DecisionScreen } from "./decision-screen";
+import { TestScreen } from "./test-screen";
+import { ExportScreen } from "./export-screen";
 
 export type Screen = "map" | "memory" | "perceive" | "act" | "decision" | "test" | "export" | "board";
 
@@ -51,13 +53,7 @@ export function AgentWorkspace({ result, onChange }: { result: BlueprintResult; 
   if (screen === "perceive") return <PerceiveScreen agent={agent} update={update} onBack={back} />;
   if (screen === "act") return <ActScreen agent={agent} update={update} onBack={back} />;
   if (screen === "decision") return <DecisionScreen agent={agent} update={update} onBack={back} />;
-  if (screen !== "map") {
-    // TEMPORARY stub — replaced by real screens in later tasks.
-    return (
-      <ScreenFrame breadcrumb={`Overview · ${screen}`} onBack={back}>
-        <p className="text-sm text-slate-400">"{screen}" screen coming next.</p>
-      </ScreenFrame>
-    );
-  }
+  if (screen === "test") return <TestScreen agent={agent} onBack={back} />;
+  if (screen === "export") return <ExportScreen agent={agent} onBack={back} />;
   return <SystemMap agent={agent} update={update} health={health} navigate={navigate} />;
 }
