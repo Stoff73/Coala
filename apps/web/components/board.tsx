@@ -23,7 +23,7 @@ import {
 } from "@coala/export";
 import JSZip from "jszip";
 import { MEMORY_KIND_META, type BlueprintResult } from "../lib/types";
-import { emptyGrant, newGrounding, newModule, newRubric } from "../lib/blueprint-edit";
+import { applyGrant, newGrounding, newModule, newRubric } from "../lib/blueprint-edit";
 import { RunPanel } from "./run-panel";
 import { Why } from "./why";
 
@@ -431,17 +431,7 @@ function AccessSection({ agent, update }: { agent: Agent; update: Update }) {
   const ltm = agent.memoryModules.filter((m) => m.kind !== "working");
 
   const setGrant = (moduleId: string, mutate: (g: Agent["accessPolicy"][number]) => void) =>
-    update((d) => {
-      let g = d.accessPolicy.find((x) => x.memoryModuleId === moduleId);
-      if (!g) {
-        g = emptyGrant(moduleId);
-        d.accessPolicy.push(g);
-      }
-      mutate(g);
-      if (g.retrieval.enabled && !g.retrieval.method) g.retrieval.method = "relevance";
-      const empty = !g.retrieval.enabled && !g.learning.add && !g.learning.modify && !g.learning.delete;
-      if (empty) d.accessPolicy = d.accessPolicy.filter((x) => x.memoryModuleId !== moduleId);
-    });
+    applyGrant(update, moduleId, mutate);
 
   return (
     <Section
@@ -512,11 +502,31 @@ function AccessSection({ agent, update }: { agent: Agent; update: Update }) {
 
 /* ------------------------------ grounding -------------------------------- */
 
-export function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
+export function GroundingSection({
+  agent,
+  update,
+  lens,
+}: {
+  agent: Agent;
+  update: Update;
+  lens?: "perceive" | "act";
+}) {
+  const title =
+    lens === "perceive"
+      ? "Perceive — how the world reaches your agent"
+      : lens === "act"
+        ? "Act — what your agent can do"
+        : "Grounding — external action space";
+  const hint =
+    lens === "perceive"
+      ? "Channels the agent receives through, plus anything it can look up."
+      : lens === "act"
+        ? "Messages it sends, things it changes, tools it runs."
+        : "How the agent affects the outside world.";
   return (
     <Section
-      title="Grounding — external action space"
-      hint="How the agent affects the outside world."
+      title={title}
+      hint={hint}
       whyId="grounding"
       action={<IconBtn title="Add interface" onClick={() => update((d) => d.groundingInterfaces.push(newGrounding()))}>+ interface</IconBtn>}
     >
@@ -537,9 +547,20 @@ export function GroundingSection({ agent, update }: { agent: Agent; update: Upda
               <div className="mt-2 pl-2">
                 <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
                   <span>tools</span>
-                  <IconBtn title="Add tool" onClick={() => update((d) => d.groundingInterfaces[gidx]!.digitalTools.push({ name: "tool", description: "" }))}>+ tool</IconBtn>
+                  <IconBtn title="Add tool" onClick={() =>
+                    update((d) =>
+                      d.groundingInterfaces[gidx]!.digitalTools.push(
+                        lens === "perceive" ? { name: "tool", description: "", sideEffect: "read" } : { name: "tool", description: "" },
+                      ),
+                    )
+                  }>+ tool</IconBtn>
                 </div>
-                {gi.digitalTools.map((t, ti) => (
+                {gi.digitalTools
+                  .map((t, ti) => ({ t, ti }))
+                  .filter(({ t }) =>
+                    !lens ? true : lens === "perceive" ? t.sideEffect === "read" : t.sideEffect !== "read",
+                  )
+                  .map(({ t, ti }) => (
                   <div key={ti} className="mb-1 flex items-center gap-1">
                     <Input value={t.name} mono onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.name = v))} className="w-40" />
                     <Input value={t.description} onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.description = v))} className="flex-1" placeholder="description" />

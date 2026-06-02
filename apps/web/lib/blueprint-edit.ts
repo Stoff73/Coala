@@ -1,5 +1,6 @@
 import type {
   AccessGrant,
+  Agent,
   BackingStoreType,
   EpisodeRubric,
   GroundingInterface,
@@ -69,4 +70,26 @@ export function emptyGrant(memoryModuleId: string): AccessGrant {
     retrieval: { enabled: false },
     learning: { add: false, modify: false, delete: false },
   };
+}
+
+/**
+ * Read-or-create the access grant for a module, mutate it, then drop it if it became empty.
+ * Shared by the board's Access matrix and the Memory screen's plain access controls.
+ */
+export function applyGrant(
+  update: (fn: (d: Agent) => void) => void,
+  moduleId: string,
+  mutate: (g: AccessGrant) => void,
+): void {
+  update((d) => {
+    let g = d.accessPolicy.find((x) => x.memoryModuleId === moduleId);
+    if (!g) {
+      g = emptyGrant(moduleId);
+      d.accessPolicy.push(g);
+    }
+    mutate(g);
+    if (g.retrieval.enabled && !g.retrieval.method) g.retrieval.method = "relevance";
+    const empty = !g.retrieval.enabled && !g.learning.add && !g.learning.modify && !g.learning.delete;
+    if (empty) d.accessPolicy = d.accessPolicy.filter((x) => x.memoryModuleId !== moduleId);
+  });
 }
