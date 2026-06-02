@@ -25,6 +25,7 @@ import JSZip from "jszip";
 import { MEMORY_KIND_META, type BlueprintResult } from "../lib/types";
 import { emptyGrant, newGrounding, newModule, newRubric } from "../lib/blueprint-edit";
 import { RunPanel } from "./run-panel";
+import { Why } from "./why";
 
 type Update = (fn: (draft: Agent) => void) => void;
 
@@ -106,17 +107,21 @@ function IconBtn(props: { onClick: () => void; children: React.ReactNode; title?
   );
 }
 
-function Section({ title, hint, action, children }: {
+function Section({ title, hint, action, children, whyId }: {
   title: string;
   hint?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  whyId?: string;
 }) {
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/30 p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
+          <h3 className="flex items-center gap-1.5 text-lg font-semibold text-slate-100">
+            {title}
+            {whyId && <Why id={whyId} />}
+          </h3>
           {hint && <p className="text-xs text-slate-400">{hint}</p>}
         </div>
         {action}
@@ -163,6 +168,7 @@ function MemorySection({ agent, update, advanced }: { agent: Agent; update: Upda
     <Section
       title="Memory modules"
       hint="Working + procedural are always present; add episodic & semantic as needed."
+      whyId="memory"
       action={
         <div className="flex gap-1">
           {MemoryKind.options.map((k) => (
@@ -193,6 +199,7 @@ function MemorySection({ agent, update, advanced }: { agent: Agent; update: Upda
                     })
                   }
                 />
+                <Why id={m.kind} />
                 <IconBtn title="Delete module" onClick={() => update((d) => d.memoryModules.splice(idx, 1))}>
                   ✕
                 </IconBtn>
@@ -434,6 +441,7 @@ function AccessSection({ agent, update }: { agent: Agent; update: Update }) {
     <Section
       title="Access — internal action space"
       hint="Read = retrieval into working memory. Add/Modify/Delete = learning (writing to long-term memory)."
+      whyId="access"
     >
       {ltm.length === 0 ? (
         <p className="text-sm text-slate-400">No long-term memory — nothing to access.</p>
@@ -442,10 +450,10 @@ function AccessSection({ agent, update }: { agent: Agent; update: Update }) {
           <thead>
             <tr className="text-xs uppercase tracking-wide text-slate-400">
               <th className="px-2 py-2 text-left">Memory</th>
-              <th className="px-2 py-2">Read</th>
-              <th className="px-2 py-2">Add</th>
-              <th className="px-2 py-2">Modify</th>
-              <th className="px-2 py-2">Delete</th>
+              <th className="px-2 py-2"><span className="inline-flex items-center gap-1">Read <Why id="rule" /></span></th>
+              <th className="px-2 py-2"><span className="inline-flex items-center gap-1">Add <Why id="learning-add" /></span></th>
+              <th className="px-2 py-2"><span className="inline-flex items-center gap-1">Modify <Why id="learning-modify" /></span></th>
+              <th className="px-2 py-2"><span className="inline-flex items-center gap-1">Delete <Why id="learning-delete" /></span></th>
             </tr>
           </thead>
           <tbody>
@@ -465,11 +473,14 @@ function AccessSection({ agent, update }: { agent: Agent; update: Update }) {
                         className="accent-emerald-500"
                       />
                       {g?.retrieval.enabled && (
-                        <Select
-                          value={g.retrieval.method ?? "relevance"}
-                          options={RetrievalMethod.options}
-                          onChange={(v) => setGrant(m.id, (gr) => void (gr.retrieval.method = v))}
-                        />
+                        <>
+                          <Select
+                            value={g.retrieval.method ?? "relevance"}
+                            options={RetrievalMethod.options}
+                            onChange={(v) => setGrant(m.id, (gr) => void (gr.retrieval.method = v))}
+                          />
+                          <Why id={g.retrieval.method ?? "relevance"} />
+                        </>
                       )}
                     </div>
                   </td>
@@ -500,6 +511,7 @@ function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
     <Section
       title="Grounding — external action space"
       hint="How the agent affects the outside world."
+      whyId="grounding"
       action={<IconBtn title="Add interface" onClick={() => update((d) => d.groundingInterfaces.push(newGrounding()))}>+ interface</IconBtn>}
     >
       <div className="space-y-3">
@@ -511,6 +523,7 @@ function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
                 options={GroundingType.options}
                 onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.type = v))}
               />
+              <Why id={gi.type} />
               <Input value={gi.name} onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.name = v))} className="flex-1" />
               <IconBtn title="Delete interface" onClick={() => update((d) => d.groundingInterfaces.splice(gidx, 1))}>✕</IconBtn>
             </div>
@@ -524,6 +537,23 @@ function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
                   <div key={ti} className="mb-1 flex items-center gap-1">
                     <Input value={t.name} mono onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.name = v))} className="w-40" />
                     <Input value={t.description} onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.description = v))} className="flex-1" placeholder="description" />
+                    <select
+                      value={t.sideEffect ?? ""}
+                      title="Side-effect class (drives the destructive-tool safety warning)"
+                      onChange={(e) =>
+                        update((d) => {
+                          const v = e.target.value;
+                          d.groundingInterfaces[gidx]!.digitalTools[ti]!.sideEffect =
+                            v === "" ? undefined : (v as "read" | "write" | "destructive");
+                        })
+                      }
+                      className="rounded border border-slate-700 bg-slate-950 px-1 py-1 text-xs outline-none focus:border-indigo-500"
+                    >
+                      <option value="">effect…</option>
+                      <option value="read">read</option>
+                      <option value="write">write</option>
+                      <option value="destructive">destructive</option>
+                    </select>
                     <IconBtn title="Remove tool" onClick={() => update((d) => d.groundingInterfaces[gidx]!.digitalTools.splice(ti, 1))}>✕</IconBtn>
                   </div>
                 ))}
@@ -593,12 +623,12 @@ function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
 function DecisionSection({ agent, update }: { agent: Agent; update: Update }) {
   const p = agent.decisionProcedure.planning;
   const stages = [
-    { key: "Propose", field: "proposal" as const, stage: p.proposal },
-    { key: "Evaluate", field: "evaluation" as const, stage: p.evaluation },
-    { key: "Select", field: "selection" as const, stage: p.selection },
+    { key: "Propose", field: "proposal" as const, stage: p.proposal, why: "proposal" },
+    { key: "Evaluate", field: "evaluation" as const, stage: p.evaluation, why: "evaluation" },
+    { key: "Select", field: "selection" as const, stage: p.selection, why: "selection" },
   ];
   return (
-    <Section title="Decision procedure" hint="The planning loop run each decision cycle.">
+    <Section title="Decision procedure" hint="The planning loop run each decision cycle." whyId="decision">
       <div className="mb-3 flex items-center gap-2 text-sm">
         <span>Style</span>
         <Select
@@ -608,13 +638,14 @@ function DecisionSection({ agent, update }: { agent: Agent; update: Update }) {
         />
       </div>
       <div className="space-y-2">
-        {stages.map(({ key, field, stage }) => (
+        {stages.map(({ key, field, stage, why }) => (
           <div key={key} className="flex items-center gap-2">
             <Check
               checked={stage.enabled}
               onChange={(v) => update((d) => void (d.decisionProcedure.planning[field].enabled = v))}
               label={key}
             />
+            <Why id={why} />
             {stage.enabled && (
               <Input
                 value={stage.strategy ?? ""}

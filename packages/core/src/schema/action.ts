@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GroundingType, Id, RecordSchema, RetrievalMethod } from "./common.js";
+import { GroundingType, Id, RecordSchema, RetrievalMethod, SideEffect } from "./common.js";
 
 /**
  * Internal action space (paper §4.3–4.5), expressed per memory module.
@@ -33,6 +33,8 @@ export const DigitalTool = z.object({
   description: z.string().default(""),
   /** Argument schema for the tool call, when defined. */
   inputSchema: RecordSchema.optional(),
+  /** Side-effect class; drives the destructive-tool safety warning (§6). */
+  sideEffect: SideEffect.optional(),
 });
 export type DigitalTool = z.infer<typeof DigitalTool>;
 

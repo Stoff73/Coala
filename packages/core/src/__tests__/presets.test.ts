@@ -33,6 +33,18 @@ describe("Table 2 presets", () => {
     },
   );
 
+  it("no preset trips the destructive-tool heuristic", () => {
+    for (const agent of PRESETS) {
+      const hits = lintAgent(agent).findings.filter(
+        (f) => f.rule === "destructive-tool-safety",
+      );
+      expect(
+        hits,
+        `${agent.name} unexpectedly flagged: ${hits.map((h) => h.message).join("; ")}`,
+      ).toHaveLength(0);
+    }
+  });
+
   it("getPreset resolves by metadata key", () => {
     expect(getPreset("react")?.name).toBe("ReAct");
     expect(getPreset("nope")).toBeUndefined();
