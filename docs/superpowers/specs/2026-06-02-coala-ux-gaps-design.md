@@ -91,11 +91,13 @@ inferred warning into a declared one (or silence a false positive).
 
 ### Presets (`packages/core/src/presets/`)
 
-Tag the naturally-destructive tools in existing presets as `sideEffect: "destructive"` (e.g. Retail
-Assistant's refund/cancel-type tools) so the presets remain *executable spec* that demonstrates the
-field. Presets continue to lint **error-free**; the new warnings are acceptable (the preset test
-asserts `ok === true`, i.e. zero errors — warnings are allowed). If a preset gains a heuristic
-warning that is undesirable noise, tag that tool `read`/`write` to silence it deliberately.
+**No preset is changed.** Audited during planning, the existing presets' only digital tools are
+`searchCatalog`, `act`, `executeSkill`, `submitAnswer`, `search`, `lookup`, `finish` — none match the
+destructive-verb list and none are genuinely destructive, so fabricating a `"destructive"` tag would
+misrepresent the archetype. Instead, `presets.test.ts` gains a regression assertion that **no preset
+emits a `destructive-tool-safety` finding** (proving the heuristic does not mis-fire on the canonical
+agents). The feature is demonstrated entirely by the `lint.test.ts` cases below. Presets continue to
+lint **error-free**.
 
 ### Tests (`packages/core/src/__tests__/lint.test.ts`)
 
