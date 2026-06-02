@@ -25,3 +25,6 @@ board-*.png
 # transient tooling state (not project source)
 .remember/
 .claude/skills/*-workspace/
+
+# brainstorming visual companion mockups
+.superpowers/

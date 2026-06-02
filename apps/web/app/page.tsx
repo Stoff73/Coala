@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { lintAgent } from "@coala/core";
 import type { Agent, ProviderName } from "@coala/core";
-import { BlueprintBoard } from "../components/board";
+import { AgentWorkspace } from "../components/workspace/agent-workspace";
 import type { BlueprintResult } from "../lib/types";
 import { useMe } from "../lib/useMe";
 import { diffAgents, mergeAgents, type AgentDiff } from "../lib/diff";
@@ -369,7 +369,7 @@ export default function Page() {
       )}
 
       {result ? (
-        <BlueprintBoard key={version} result={result} onChange={setCurrentAgent} />
+        <AgentWorkspace key={version} result={result} onChange={setCurrentAgent} />
       ) : (
         <p className="text-center text-sm text-slate-500">
           Generate a blueprint or load a preset to see the CoALA board.

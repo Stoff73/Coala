@@ -23,11 +23,11 @@ import {
 } from "@coala/export";
 import JSZip from "jszip";
 import { MEMORY_KIND_META, type BlueprintResult } from "../lib/types";
-import { emptyGrant, newGrounding, newModule, newRubric } from "../lib/blueprint-edit";
+import { applyGrant, newGrounding, newModule, newRubric } from "../lib/blueprint-edit";
 import { RunPanel } from "./run-panel";
 import { Why } from "./why";
 
-type Update = (fn: (draft: Agent) => void) => void;
+export type Update = (fn: (draft: Agent) => void) => void;
 
 /* ----------------------------- tiny inputs ------------------------------- */
 
@@ -180,159 +180,165 @@ function MemorySection({ agent, update, advanced }: { agent: Agent; update: Upda
       }
     >
       <div className="grid gap-4 lg:grid-cols-2">
-        {agent.memoryModules.map((m, idx) => {
-          const meta = MEMORY_KIND_META[m.kind];
-          return (
-            <div key={m.id} className={`rounded-xl border p-4 ${meta.cls}`}>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <Select
-                  value={m.kind}
-                  options={MemoryKind.options}
-                  onChange={(kind) =>
-                    update((d) => {
-                      const mod = d.memoryModules[idx]!;
-                      mod.kind = kind;
-                      mod.backingStore.type =
-                        kind === "working" ? "kv" : kind === "procedural" ? "code" : "pgvector";
-                      if ((kind === "semantic" || kind === "episodic") && !mod.schema)
-                        mod.schema = { title: "Record", fields: [] };
-                    })
-                  }
-                />
-                <Why id={m.kind} />
-                <IconBtn title="Delete module" onClick={() => update((d) => d.memoryModules.splice(idx, 1))}>
-                  ✕
-                </IconBtn>
-              </div>
-
-              <Input
-                value={m.name}
-                onChange={(v) => update((d) => void (d.memoryModules[idx]!.name = v))}
-                className="mb-2 w-full font-semibold"
-                placeholder="Module name"
-              />
-              <Area value={m.description} onChange={(v) => update((d) => void (d.memoryModules[idx]!.description = v))} />
-
-              {advanced && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <span>store</span>
-                  <Select
-                    value={m.backingStore.type}
-                    options={BackingStoreType.options}
-                    onChange={(v) => update((d) => void (d.memoryModules[idx]!.backingStore.type = v))}
-                  />
-                  {m.retrievalConfig && (
-                    <>
-                      <span>retrieval</span>
-                      <Select
-                        value={m.retrievalConfig.method}
-                        options={RetrievalMethod.options}
-                        onChange={(v) =>
-                          update((d) => void (d.memoryModules[idx]!.retrievalConfig = { method: v }))
-                        }
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* schema editor (the "memory model") */}
-              {m.schema && (
-                <div className="mt-3 rounded-lg bg-slate-900/50 p-2">
-                  <div className="mb-1 flex items-center justify-between">
-                    <Input
-                      value={m.schema.title}
-                      onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.title = v))}
-                      className="font-semibold"
-                    />
-                    <IconBtn
-                      title="Add field"
-                      onClick={() =>
-                        update((d) =>
-                          d.memoryModules[idx]!.schema!.fields.push({ name: "field", type: "string", required: false }),
-                        )
-                      }
-                    >
-                      + field
-                    </IconBtn>
-                  </div>
-                  {m.schema.fields.map((f, fi) => (
-                    <div key={fi} className="mb-1 flex items-center gap-1">
-                      <Input
-                        value={f.name}
-                        onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.fields[fi]!.name = v))}
-                        className="flex-1"
-                      />
-                      <Select
-                        value={f.type}
-                        options={FieldType.options}
-                        onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.fields[fi]!.type = v))}
-                      />
-                      <Check
-                        checked={!!f.required}
-                        onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.fields[fi]!.required = v))}
-                        label="req"
-                      />
-                      <IconBtn title="Remove field" onClick={() => update((d) => d.memoryModules[idx]!.schema!.fields.splice(fi, 1))}>
-                        ✕
-                      </IconBtn>
-                    </div>
-                  ))}
-
-                  {/* records editor — always available (semantic/episodic seed data) */}
-                  {(
-                    <div className="mt-2 border-t border-slate-800 pt-2">
-                      <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
-                        <span>records ({m.records.length})</span>
-                        <IconBtn title="Add record" onClick={() => update((d) => d.memoryModules[idx]!.records.push({ id: `rec-${Date.now().toString(36)}`, data: {}, source: "seed" }))}>
-                          + record
-                        </IconBtn>
-                      </div>
-                      {m.records.map((rec, ri) => (
-                        <div key={rec.id} className="mb-1 flex flex-wrap items-center gap-1">
-                          {m.schema!.fields.map((f) => (
-                            <Input
-                              key={f.name}
-                              value={rec.data[f.name] != null ? String(rec.data[f.name]) : ""}
-                              placeholder={f.name}
-                              onChange={(v) =>
-                                update((d) => {
-                                  d.memoryModules[idx]!.records[ri]!.data[f.name] =
-                                    f.type === "number" && v !== "" ? Number(v) : v;
-                                })
-                              }
-                              className="w-28"
-                            />
-                          ))}
-                          <IconBtn title="Remove record" onClick={() => update((d) => d.memoryModules[idx]!.records.splice(ri, 1))}>
-                            ✕
-                          </IconBtn>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* procedural editor — prompt templates + skills */}
-              {m.kind === "procedural" && <ProceduralEditor module={m} idx={idx} update={update} />}
-
-              {/* episodic rubric editor — create + edit scoring/reflection */}
-              {m.kind === "episodic" && <RubricEditor module={m} idx={idx} update={update} />}
-
-              {advanced && (
-                <Input
-                  value={m.rationale ?? ""}
-                  onChange={(v) => update((d) => void (d.memoryModules[idx]!.rationale = v))}
-                  placeholder="rationale (why this module?)"
-                  className="mt-2 w-full text-xs italic"
-                />
-              )}
-            </div>
-          );
-        })}
+        {agent.memoryModules.map((m, idx) => (
+          <ModuleEditor key={m.id} agent={agent} idx={idx} update={update} advanced={advanced} />
+        ))}
       </div>
     </Section>
+  );
+}
+
+/** Editor for a single memory module. Reused by the board (MemorySection) and the Memory screen. */
+export function ModuleEditor({ agent, idx, update, advanced }: { agent: Agent; idx: number; update: Update; advanced: boolean }) {
+  const m = agent.memoryModules[idx]!;
+  const meta = MEMORY_KIND_META[m.kind];
+  return (
+    <div className={`rounded-xl border p-4 ${meta.cls}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <Select
+          value={m.kind}
+          options={MemoryKind.options}
+          onChange={(kind) =>
+            update((d) => {
+              const mod = d.memoryModules[idx]!;
+              mod.kind = kind;
+              mod.backingStore.type =
+                kind === "working" ? "kv" : kind === "procedural" ? "code" : "pgvector";
+              if ((kind === "semantic" || kind === "episodic") && !mod.schema)
+                mod.schema = { title: "Record", fields: [] };
+            })
+          }
+        />
+        <Why id={m.kind} />
+        <IconBtn title="Delete module" onClick={() => update((d) => d.memoryModules.splice(idx, 1))}>
+          ✕
+        </IconBtn>
+      </div>
+
+      <Input
+        value={m.name}
+        onChange={(v) => update((d) => void (d.memoryModules[idx]!.name = v))}
+        className="mb-2 w-full font-semibold"
+        placeholder="Module name"
+      />
+      <Area value={m.description} onChange={(v) => update((d) => void (d.memoryModules[idx]!.description = v))} />
+
+      {advanced && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <span>store</span>
+          <Select
+            value={m.backingStore.type}
+            options={BackingStoreType.options}
+            onChange={(v) => update((d) => void (d.memoryModules[idx]!.backingStore.type = v))}
+          />
+          {m.retrievalConfig && (
+            <>
+              <span>retrieval</span>
+              <Select
+                value={m.retrievalConfig.method}
+                options={RetrievalMethod.options}
+                onChange={(v) =>
+                  update((d) => void (d.memoryModules[idx]!.retrievalConfig = { method: v }))
+                }
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* schema editor (the "memory model") */}
+      {m.schema && (
+        <div className="mt-3 rounded-lg bg-slate-900/50 p-2">
+          <div className="mb-1 flex items-center justify-between">
+            <Input
+              value={m.schema.title}
+              onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.title = v))}
+              className="font-semibold"
+            />
+            <IconBtn
+              title="Add field"
+              onClick={() =>
+                update((d) =>
+                  d.memoryModules[idx]!.schema!.fields.push({ name: "field", type: "string", required: false }),
+                )
+              }
+            >
+              + field
+            </IconBtn>
+          </div>
+          {m.schema.fields.map((f, fi) => (
+            <div key={fi} className="mb-1 flex items-center gap-1">
+              <Input
+                value={f.name}
+                onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.fields[fi]!.name = v))}
+                className="flex-1"
+              />
+              <Select
+                value={f.type}
+                options={FieldType.options}
+                onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.fields[fi]!.type = v))}
+              />
+              <Check
+                checked={!!f.required}
+                onChange={(v) => update((d) => void (d.memoryModules[idx]!.schema!.fields[fi]!.required = v))}
+                label="req"
+              />
+              <IconBtn title="Remove field" onClick={() => update((d) => d.memoryModules[idx]!.schema!.fields.splice(fi, 1))}>
+                ✕
+              </IconBtn>
+            </div>
+          ))}
+
+          {/* records editor — always available (semantic/episodic seed data) */}
+          {(
+            <div className="mt-2 border-t border-slate-800 pt-2">
+              <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+                <span>records ({m.records.length})</span>
+                <IconBtn title="Add record" onClick={() => update((d) => d.memoryModules[idx]!.records.push({ id: `rec-${Date.now().toString(36)}`, data: {}, source: "seed" }))}>
+                  + record
+                </IconBtn>
+              </div>
+              {m.records.map((rec, ri) => (
+                <div key={rec.id} className="mb-1 flex flex-wrap items-center gap-1">
+                  {m.schema!.fields.map((f) => (
+                    <Input
+                      key={f.name}
+                      value={rec.data[f.name] != null ? String(rec.data[f.name]) : ""}
+                      placeholder={f.name}
+                      onChange={(v) =>
+                        update((d) => {
+                          d.memoryModules[idx]!.records[ri]!.data[f.name] =
+                            f.type === "number" && v !== "" ? Number(v) : v;
+                        })
+                      }
+                      className="w-28"
+                    />
+                  ))}
+                  <IconBtn title="Remove record" onClick={() => update((d) => d.memoryModules[idx]!.records.splice(ri, 1))}>
+                    ✕
+                  </IconBtn>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* procedural editor — prompt templates + skills */}
+      {m.kind === "procedural" && <ProceduralEditor module={m} idx={idx} update={update} />}
+
+      {/* episodic rubric editor — create + edit scoring/reflection */}
+      {m.kind === "episodic" && <RubricEditor module={m} idx={idx} update={update} />}
+
+      {advanced && (
+        <Input
+          value={m.rationale ?? ""}
+          onChange={(v) => update((d) => void (d.memoryModules[idx]!.rationale = v))}
+          placeholder="rationale (why this module?)"
+          className="mt-2 w-full text-xs italic"
+        />
+      )}
+    </div>
   );
 }
 
@@ -425,17 +431,7 @@ function AccessSection({ agent, update }: { agent: Agent; update: Update }) {
   const ltm = agent.memoryModules.filter((m) => m.kind !== "working");
 
   const setGrant = (moduleId: string, mutate: (g: Agent["accessPolicy"][number]) => void) =>
-    update((d) => {
-      let g = d.accessPolicy.find((x) => x.memoryModuleId === moduleId);
-      if (!g) {
-        g = emptyGrant(moduleId);
-        d.accessPolicy.push(g);
-      }
-      mutate(g);
-      if (g.retrieval.enabled && !g.retrieval.method) g.retrieval.method = "relevance";
-      const empty = !g.retrieval.enabled && !g.learning.add && !g.learning.modify && !g.learning.delete;
-      if (empty) d.accessPolicy = d.accessPolicy.filter((x) => x.memoryModuleId !== moduleId);
-    });
+    applyGrant(update, moduleId, mutate);
 
   return (
     <Section
@@ -506,11 +502,31 @@ function AccessSection({ agent, update }: { agent: Agent; update: Update }) {
 
 /* ------------------------------ grounding -------------------------------- */
 
-function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
+export function GroundingSection({
+  agent,
+  update,
+  lens,
+}: {
+  agent: Agent;
+  update: Update;
+  lens?: "perceive" | "act";
+}) {
+  const title =
+    lens === "perceive"
+      ? "Perceive — how the world reaches your agent"
+      : lens === "act"
+        ? "Act — what your agent can do"
+        : "Grounding — external action space";
+  const hint =
+    lens === "perceive"
+      ? "Channels the agent receives through, plus anything it can look up."
+      : lens === "act"
+        ? "Messages it sends, things it changes, tools it runs."
+        : "How the agent affects the outside world.";
   return (
     <Section
-      title="Grounding — external action space"
-      hint="How the agent affects the outside world."
+      title={title}
+      hint={hint}
       whyId="grounding"
       action={<IconBtn title="Add interface" onClick={() => update((d) => d.groundingInterfaces.push(newGrounding()))}>+ interface</IconBtn>}
     >
@@ -531,9 +547,20 @@ function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
               <div className="mt-2 pl-2">
                 <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
                   <span>tools</span>
-                  <IconBtn title="Add tool" onClick={() => update((d) => d.groundingInterfaces[gidx]!.digitalTools.push({ name: "tool", description: "" }))}>+ tool</IconBtn>
+                  <IconBtn title="Add tool" onClick={() =>
+                    update((d) =>
+                      d.groundingInterfaces[gidx]!.digitalTools.push(
+                        lens === "perceive" ? { name: "tool", description: "", sideEffect: "read" } : { name: "tool", description: "" },
+                      ),
+                    )
+                  }>+ tool</IconBtn>
                 </div>
-                {gi.digitalTools.map((t, ti) => (
+                {gi.digitalTools
+                  .map((t, ti) => ({ t, ti }))
+                  .filter(({ t }) =>
+                    !lens ? true : lens === "perceive" ? t.sideEffect === "read" : t.sideEffect !== "read",
+                  )
+                  .map(({ t, ti }) => (
                   <div key={ti} className="mb-1 flex items-center gap-1">
                     <Input value={t.name} mono onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.name = v))} className="w-40" />
                     <Input value={t.description} onChange={(v) => update((d) => void (d.groundingInterfaces[gidx]!.digitalTools[ti]!.description = v))} className="flex-1" placeholder="description" />
@@ -620,7 +647,7 @@ function GroundingSection({ agent, update }: { agent: Agent; update: Update }) {
 
 /* ------------------------------- decision -------------------------------- */
 
-function DecisionSection({ agent, update }: { agent: Agent; update: Update }) {
+export function DecisionSection({ agent, update }: { agent: Agent; update: Update }) {
   const p = agent.decisionProcedure.planning;
   const stages = [
     { key: "Propose", field: "proposal" as const, stage: p.proposal, why: "proposal" },
@@ -699,7 +726,7 @@ const downloadZip = (agent: Agent, lang: string, base: string) =>
 const downloadScaffold = (agent: Agent, base: string) =>
   zipFiles(scaffoldMemory(agent), `${base}-memory`, `${base}-memory.zip`);
 
-function ExportBar({ agent }: { agent: Agent }) {
+export function ExportBar({ agent }: { agent: Agent }) {
   const base = (agent.name || "agent").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const emitters = listEmitters();
   const [lang, setLang] = useState(emitters[0]?.id ?? "python");
@@ -792,25 +819,34 @@ function ExportBar({ agent }: { agent: Agent }) {
 export function BlueprintBoard({
   result,
   onChange,
+  agent: agentProp,
+  update: updateProp,
 }: {
   result: BlueprintResult;
   onChange?: (agent: Agent) => void;
+  agent?: Agent;
+  update?: Update;
 }) {
-  const [agent, setAgent] = useState<Agent>(result.agent);
+  const parented = agentProp !== undefined && updateProp !== undefined;
+  const [ownAgent, setOwnAgent] = useState<Agent>(result.agent);
+  const agent = parented ? agentProp! : ownAgent;
   const [advanced, setAdvanced] = useState(false);
 
-  // Surface the live, edited agent to the parent (for Save/Share).
+  // Standalone only: surface the live, edited agent to the parent (for Save/Share).
+  // When parented, the parent owns state and onChange.
   useEffect(() => {
-    onChange?.(agent);
+    if (!parented) onChange?.(ownAgent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent]);
+  }, [ownAgent, parented]);
 
-  const update: Update = (fn) =>
-    setAgent((prev) => {
-      const next = structuredClone(prev);
-      fn(next);
-      return next;
-    });
+  const update: Update = parented
+    ? updateProp!
+    : (fn) =>
+        setOwnAgent((prev) => {
+          const next = structuredClone(prev);
+          fn(next);
+          return next;
+        });
 
   return (
     <div className="space-y-5">
