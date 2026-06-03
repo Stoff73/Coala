@@ -84,7 +84,7 @@ export async function saveAgentFolder(root: string, agent: Agent): Promise<void>
       seenRecordSlugs.set(fileSlug, rec.id);
       await writeFile(
         join(dir, `${fileSlug}.md`),
-        stringifyFrontmatter({ id: rec.id, source: rec.source, data: rec.data }, ""),
+        stringifyFrontmatter({ id: fileSlug, source: rec.source, data: rec.data }, ""),
       );
     }
     await reindexModule(dir, { name: m.name, kind: m.kind });
