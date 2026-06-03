@@ -15,7 +15,12 @@ export interface RetrievalQuery {
 export interface Pointer {
   id: string;
   summary: string;
-  /** Rankable metadata: importance, created, source, … */
+  /**
+   * Open-ended, backend-defined ranking metadata. Conventional keys are
+   * `importance`, `created`, and `source`, but a backend may rank on others —
+   * deliberately not narrowed to a closed type or to RecordMeta (which is a
+   * write-time type: a pointer never carries `body`, and may carry `created`).
+   */
   meta: Record<string, unknown>;
 }
 

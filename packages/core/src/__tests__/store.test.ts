@@ -28,4 +28,9 @@ describe("Store contract", () => {
     expect(await s.openBody("0")).toEqual({ a: 1 });
     expect(await s.retrieve({ text: "x", method: "recency", k: 5 })).toHaveLength(1);
   });
+
+  it("openBody returns undefined for an unknown id", async () => {
+    const s = new ArrayStore();
+    expect(await s.openBody("999")).toBeUndefined();
+  });
 });
