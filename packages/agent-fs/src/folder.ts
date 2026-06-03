@@ -176,6 +176,19 @@ export async function loadAgentFolder(root: string): Promise<{ agent: Agent; roo
     learning: a.learning,
   }));
 
+  // Grounding interfaces are stored verbatim. A blueprint that was built without
+  // strict validation (e.g. a `dialogue` interface given only its `type`) would
+  // otherwise fail re-validation on load; backfill the required `id`/`name` from
+  // the interface `type` so the round-trip yields a valid Agent.
+  const grounding = ((data.grounding as Array<Record<string, unknown>>) ?? []).map((g, i) => {
+    const type = g.type ? String(g.type) : "dialogue";
+    return {
+      id: g.id ?? `ground-${type}-${i}`,
+      name: g.name ?? `${type[0]!.toUpperCase()}${type.slice(1)}`,
+      ...g,
+    };
+  });
+
   const agent = parseAgent({
     id: data.id,
     name: data.name,
@@ -183,7 +196,7 @@ export async function loadAgentFolder(root: string): Promise<{ agent: Agent; roo
     goals: data.goals ?? [],
     providerConfig: data.provider,
     memoryModules,
-    groundingInterfaces: data.grounding ?? [],
+    groundingInterfaces: grounding,
     accessPolicy,
     decisionProcedure: data.decisionProcedure,
     metadata: data.metadata,
