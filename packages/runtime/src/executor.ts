@@ -8,6 +8,10 @@ import {
   type Record_,
 } from "./memory.js";
 import { ToolRegistry } from "./tools.js";
+import { EmbeddingIndex } from "./embedding.js";
+import { ActionProposal } from "./schema.js";
+import { actionTargets, reasonRequest } from "./prompt.js";
+import type { CycleStep, RetrievedItem, TurnResult } from "./trace.js";
 
 /** Register the built-in `memory.open` tool: pull one record body by moduleId + id. */
 export function registerMemoryOpen(tools: ToolRegistry, stores: Map<string, Store>): void {
@@ -20,10 +24,6 @@ export function registerMemoryOpen(tools: ToolRegistry, stores: Map<string, Stor
     return body ?? { error: `No record "${id}" in "${moduleId}".` };
   });
 }
-import { EmbeddingIndex } from "./embedding.js";
-import { ActionProposal } from "./schema.js";
-import { actionTargets, reasonRequest } from "./prompt.js";
-import type { CycleStep, RetrievedItem, TurnResult } from "./trace.js";
 
 export interface RuntimeOptions {
   /** Safety bound on cycles per turn (prevents runaway loops). */
