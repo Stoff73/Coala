@@ -6,7 +6,8 @@ export function slugify(id: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
+    .slice(0, 80)
+    .replace(/^-+|-+$/g, "");
 }
 
 /** Throw if `target` resolves outside `root` (path-traversal guard). */
