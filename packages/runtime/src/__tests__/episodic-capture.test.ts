@@ -45,4 +45,29 @@ describe("episodic capture", () => {
     await rt.runTurn("hi");
     expect(await ep.listPointers()).toHaveLength(0);
   });
+
+  it("preserves the reply when the reflection call fails", async () => {
+    const provider = new MockProvider([
+      { match: (req) => (req.system ?? "").includes("record a past episode"),
+        text: () => { throw new Error("reflection boom"); } },
+      { match: () => true, text: JSON.stringify({ thought: "reply", action: { type: "respond", message: "Hello!" } }) },
+    ]);
+    const ep = new InMemoryStore([]);
+    const rt = new AgentRuntime(agent, provider, undefined, { stores: new Map([["ep", ep]]), captureEpisodes: true });
+    const result = await rt.runTurn("hi");
+    expect(result.reply).toBe("Hello!");          // reply preserved
+    expect(await ep.listPointers()).toHaveLength(0); // nothing captured
+  });
+
+  it("surfaces capturedEpisode in the TurnResult on success", async () => {
+    const provider = new MockProvider([
+      { match: (req) => (req.system ?? "").includes("record a past episode"),
+        text: JSON.stringify({ data: { observation: "x" }, rubricScores: {}, reflection: "r" }) },
+      { match: () => true, text: JSON.stringify({ thought: "reply", action: { type: "respond", message: "Hi" } }) },
+    ]);
+    const ep = new InMemoryStore([]);
+    const rt = new AgentRuntime(agent, provider, undefined, { stores: new Map([["ep", ep]]), captureEpisodes: true });
+    const result = await rt.runTurn("hi");
+    expect(result.capturedEpisode?.moduleId).toBe("ep");
+  });
 });

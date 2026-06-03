@@ -14,6 +14,12 @@ import { ActionProposal } from "./schema.js";
 import { actionTargets, reasonRequest } from "./prompt.js";
 import type { CycleStep, RetrievedItem, TurnResult } from "./trace.js";
 
+const EpisodeCaptureSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+  rubricScores: z.record(z.string(), z.unknown()).default({}),
+  reflection: z.string().default(""),
+});
+
 /** Register the built-in `memory.open` tool: pull one record body by moduleId + id. */
 export function registerMemoryOpen(tools: ToolRegistry, stores: Map<string, Store>): void {
   tools.register("memory.open", async (args) => {
@@ -139,9 +145,16 @@ export class AgentRuntime {
       if (entry.terminal) break;
     }
 
-    if (this.opts.captureEpisodes) await this.captureEpisode(input, reply, steps);
-
-    return { reply, steps };
+    let capturedEpisode: { moduleId: string; pointerId: string } | undefined;
+    if (this.opts.captureEpisodes) {
+      try {
+        capturedEpisode = await this.captureEpisode(input, reply, steps);
+      } catch (err) {
+        // Reflection is best-effort; log and swallow so the reply is never lost.
+        console.warn("[AgentRuntime] episodic capture failed (turn reply preserved):", err);
+      }
+    }
+    return { reply, steps, capturedEpisode };
   }
 
   /** First writable episodic module (learning.add) the agent has, if any. */
@@ -155,17 +168,12 @@ export class AgentRuntime {
   }
 
   /** Make one structured LLM call to score the turn against the module's rubric, then persist it. */
-  private async captureEpisode(input: string, reply: string | null, steps: CycleStep[]): Promise<void> {
+  private async captureEpisode(input: string, reply: string | null, steps: CycleStep[]): Promise<{ moduleId: string; pointerId: string } | undefined> {
     const module = this.episodicTarget();
     const store = module && this.stores.get(module.id);
-    if (!module || !store) return;
+    if (!module || !store) return undefined;
     const rubric = module.rubric ?? { criteria: [], reflectionPrompts: [] };
 
-    const Schema = z.object({
-      data: z.record(z.string(), z.unknown()),
-      rubricScores: z.record(z.string(), z.unknown()).default({}),
-      reflection: z.string().default(""),
-    });
     const request = {
       model: this.agent.providerConfig.model,
       system: "You record a past episode into episodic memory. Score it against the rubric and reflect honestly.",
@@ -179,11 +187,12 @@ export class AgentRuntime {
           `Return JSON { "data": {...the episode trajectory...}, "rubricScores": {...}, "reflection": "..." }.`,
       }],
     };
-    const ep = await this.provider.completeStructured(request, Schema);
-    await store.add(
+    const ep = await this.provider.completeStructured(request, EpisodeCaptureSchema);
+    const ptr = await store.add(
       { ...ep.data, rubricScores: ep.rubricScores },
       { source: "runtime", body: ep.reflection ? `## Reflection\n${ep.reflection}\n` : "" },
     );
+    return { moduleId: module.id, pointerId: ptr.id };
   }
 
   /** Apply a learning (write) action, enforcing the agent's access policy. */
