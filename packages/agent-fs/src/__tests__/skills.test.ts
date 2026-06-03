@@ -34,4 +34,15 @@ describe("resolveSkill", () => {
       resolveSkill(root, { id: "x", kind: "script", run: { interpreter: "python", script: "../evil.py" } }),
     ).rejects.toThrow(/escapes/);
   });
+
+  it("reads a reference given an absolute path inside root", async () => {
+    const r = await resolveSkill(root, { id: "n", kind: "reference", path: join(root, "note.md") });
+    expect(r.content).toBe("referenced content");
+  });
+  it("throws a clear error when a reference has no path", async () => {
+    await expect(resolveSkill(root, { id: "n", kind: "reference" })).rejects.toThrow(/missing required field "path"/);
+  });
+  it("throws a clear error when a script has no run.script", async () => {
+    await expect(resolveSkill(root, { id: "s", kind: "script", run: { interpreter: "python", script: "" } })).rejects.toThrow(/missing required field "run.script"/);
+  });
 });
