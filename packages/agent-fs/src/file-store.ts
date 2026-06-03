@@ -17,6 +17,8 @@ export class FileStore implements Store {
   ) {}
 
   private async indexExists(): Promise<boolean> {
+    // Existence probe: intentionally treats any access failure (not just ENOENT)
+    // as "absent" — a missing/unreadable index simply triggers a reindex.
     try { await access(join(this.moduleDir, "_index.md")); return true; }
     catch { return false; }
   }
@@ -35,9 +37,10 @@ export class FileStore implements Store {
   async openBody(id: string): Promise<Record_ | undefined> {
     try {
       const { data } = parseFrontmatter(await readFile(join(this.moduleDir, `${id}.md`), "utf8"));
-      return ((data.data as Record_) ?? {}) as Record_;
-    } catch {
-      return undefined;
+      return (data.data as Record_) ?? {};
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw e;
     }
   }
 
@@ -48,6 +51,7 @@ export class FileStore implements Store {
     for (const p of ranked.slice(0, q.k)) {
       const body = await this.openBody(p.id);
       if (body) out.push(body);
+      else console.warn(`FileStore: indexed record "${p.id}" has no body file in ${this.moduleDir}; skipping.`);
     }
     return out;
   }
@@ -55,16 +59,20 @@ export class FileStore implements Store {
   private rank(pointers: Pointer[], q: RetrievalQuery): Pointer[] {
     switch (q.method) {
       case "recency":
-        return [...pointers].sort((a, b) =>
-          String(b.meta.created ?? "").localeCompare(String(a.meta.created ?? "")));
+        return [...pointers].sort((a, b) => {
+          const ta = a.meta.created ? String(a.meta.created) : "";
+          const tb = b.meta.created ? String(b.meta.created) : "";
+          return tb.localeCompare(ta);
+        });
       case "importance":
         return [...pointers].sort((a, b) => Number(b.meta.importance ?? 0) - Number(a.meta.importance ?? 0));
       case "rule":
-        return pointers;
+        return [...pointers];
       case "relevance":
       case "embedding":
       default: {
         const qset = new Set(tokens(q.text));
+        if (qset.size === 0) return [...pointers];
         return [...pointers]
           .map((p) => ({ p, s: tokens(p.summary).filter((t) => qset.has(t)).length }))
           .filter((x) => x.s > 0)
@@ -79,7 +87,8 @@ export class FileStore implements Store {
     // pass one for a deterministic filename, so read it off via a cast without
     // widening the public signature past the Store contract.
     const explicitId = (meta as (RecordMeta & { id?: string }) | undefined)?.id;
-    const id = slugify(explicitId ?? `rec-${(await this.listPointers()).length + 1}`);
+    const id = slugify(explicitId ?? `rec-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+    if (!id) throw new Error(`Record id "${explicitId ?? ""}" slugifies to an empty filename.`);
     const file = join(this.moduleDir, `${id}.md`);
     const frontmatter: Record<string, unknown> = {
       id,
@@ -93,6 +102,8 @@ export class FileStore implements Store {
     await writeFile(tmp, stringifyFrontmatter(frontmatter, meta?.body ?? ""));
     await rename(tmp, file);
     const pointers = await reindexModule(this.moduleDir, this.ref);
-    return pointers.find((p) => p.id === id) ?? { id, summary: "", meta: {} };
+    const ptr = pointers.find((p) => p.id === id);
+    if (!ptr) throw new Error(`FileStore: wrote "${id}.md" but it is missing from the rebuilt index.`);
+    return ptr;
   }
 }

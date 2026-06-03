@@ -48,4 +48,22 @@ describe("FileStore", () => {
     expect(idx).toContain("c");
     expect((await s.listPointers()).map((p) => p.id).sort()).toEqual(["a", "b", "c"]);
   });
+
+  it("add() generates distinct ids for concurrent no-id writes", async () => {
+    const s = new FileStore(dir, { name: "facts", kind: "semantic" });
+    const [p1, p2] = await Promise.all([s.add({ fact: "x" }), s.add({ fact: "y" })]);
+    expect(p1.id).not.toBe(p2.id);
+    expect((await s.listPointers()).length).toBe(4); // a, b, + 2 new
+  });
+
+  it("add() rejects an id that slugifies to empty", async () => {
+    const s = new FileStore(dir, { name: "facts", kind: "semantic" });
+    await expect(s.add({ fact: "x" }, { id: "///" } as any)).rejects.toThrow(/empty/);
+  });
+
+  it("relevance with a blank query returns records (falls back to all)", async () => {
+    const s = new FileStore(dir, { name: "facts", kind: "semantic" });
+    const recs = await s.retrieve({ text: "", method: "relevance", k: 5 });
+    expect(recs.length).toBe(2);
+  });
 });
