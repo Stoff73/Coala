@@ -1,4 +1,5 @@
 import type { EmbeddingProvider } from "@coala/providers";
+import type { Pointer } from "@coala/core";
 import type { Record_ } from "./memory.js";
 
 export function cosine(a: number[], b: number[]): number {
@@ -44,5 +45,20 @@ export class EmbeddingIndex {
       .sort((a, b) => b.score - a.score)
       .slice(0, k)
       .map((x) => x.r);
+  }
+
+  async rankPointers(pointers: Pointer[], query: string, k: number): Promise<Pointer[]> {
+    if (pointers.length === 0) return [];
+    const missing = pointers.filter((p) => !this.cache.has(p.summary));
+    if (missing.length) {
+      const vecs = await this.embedder.embed(missing.map((p) => p.summary));
+      missing.forEach((p, i) => this.cache.set(p.summary, vecs[i]!));
+    }
+    const [qv] = await this.embedder.embed([query]);
+    return pointers
+      .map((p) => ({ p, score: cosine(qv!, this.cache.get(p.summary)!) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, k)
+      .map((x) => x.p);
   }
 }

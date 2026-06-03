@@ -1,7 +1,7 @@
 import type { Agent } from "@coala/core";
+import type { Store } from "@coala/core";
 import type { EmbeddingProvider, LLMProvider } from "@coala/providers";
 import {
-  InMemoryStore,
   WorkingMemory,
   buildStores,
   moduleById,
@@ -18,6 +18,8 @@ export interface RuntimeOptions {
   maxSteps?: number;
   /** Embedder enabling real vector ("embedding") retrieval; falls back to keyword if absent. */
   embedder?: EmbeddingProvider;
+  /** Pre-built stores (e.g. FileStore from @coala/agent-fs). Defaults to in-memory. */
+  stores?: Map<string, Store>;
 }
 
 /**
@@ -27,7 +29,7 @@ export interface RuntimeOptions {
  */
 export class AgentRuntime {
   readonly working = new WorkingMemory();
-  readonly stores: Map<string, InMemoryStore>;
+  readonly stores: Map<string, Store>;
   private readonly embeddingIndex?: EmbeddingIndex;
 
   constructor(
@@ -36,7 +38,7 @@ export class AgentRuntime {
     private readonly tools: ToolRegistry = new ToolRegistry(),
     private readonly opts: RuntimeOptions = {},
   ) {
-    this.stores = buildStores(agent);
+    this.stores = opts.stores ?? buildStores(agent);
     if (opts.embedder) this.embeddingIndex = new EmbeddingIndex(opts.embedder);
   }
 
@@ -55,11 +57,18 @@ export class AgentRuntime {
       if (!store) continue;
       const method = grant.retrieval.method ?? module.retrievalConfig?.method ?? "relevance";
       const k = module.retrievalConfig?.k ?? 5;
-      // Real vector retrieval when an embedder is available; otherwise keyword fallback.
-      const records =
-        method === "embedding" && this.embeddingIndex
-          ? await this.embeddingIndex.rank(store.records, query, k)
-          : store.retrieve({ text: query, method, k });
+      let records: Record_[];
+      if (method === "embedding" && this.embeddingIndex) {
+        const pointers = await store.listPointers();
+        const winners = await this.embeddingIndex.rankPointers(pointers, query, k);
+        records = [];
+        for (const p of winners) {
+          const body = await store.openBody(p.id);
+          if (body) records.push(body);
+        }
+      } else {
+        records = await store.retrieve({ text: query, method, k });
+      }
       items.push({ moduleId: module.id, moduleName: module.name, method, records });
     }
     return items;
@@ -103,7 +112,7 @@ export class AgentRuntime {
           break;
         }
         case "learning": {
-          const write = this.applyLearning(action.memoryModuleId, action.record ?? {});
+          const write = await this.applyLearning(action.memoryModuleId, action.record ?? {});
           if (typeof write === "string") entry.blocked = write;
           else entry.memoryWrite = write;
           break;
@@ -118,14 +127,14 @@ export class AgentRuntime {
   }
 
   /** Apply a learning (write) action, enforcing the agent's access policy. */
-  private applyLearning(moduleId: string | undefined, record: Record_) {
+  private async applyLearning(moduleId: string | undefined, record: Record_) {
     if (!moduleId) return "No memoryModuleId provided.";
     const grant = this.agent.accessPolicy.find((a) => a.memoryModuleId === moduleId);
     if (!grant?.learning.add) return `Module "${moduleId}" is not writable (no learning grant).`;
     const store = this.stores.get(moduleId);
     const module = moduleById(this.agent, moduleId);
     if (!store || !module) return `Module "${moduleId}" has no store.`;
-    store.add(record);
+    await store.add(record);
     return { moduleId, moduleName: module.name, record };
   }
 }

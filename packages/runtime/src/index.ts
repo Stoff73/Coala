@@ -9,9 +9,8 @@ export {
   InMemoryStore,
   buildStores,
   moduleById,
-  type Record_,
-  type RetrievalQuery,
 } from "./memory.js";
+export type { Store, Pointer, Record_, RecordMeta, RetrievalQuery } from "@coala/core";
 export { EmbeddingIndex, cosine } from "./embedding.js";
 export { ActionProposal, ProposedAction } from "./schema.js";
 export { actionTargets, reasonRequest, type ActionTarget } from "./prompt.js";
