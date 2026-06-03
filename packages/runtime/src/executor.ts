@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Agent } from "@coala/core";
 import type { Store } from "@coala/core";
 import type { EmbeddingProvider, LLMProvider } from "@coala/providers";
@@ -32,6 +33,8 @@ export interface RuntimeOptions {
   embedder?: EmbeddingProvider;
   /** Pre-built stores (e.g. FileStore from @coala/agent-fs). Defaults to in-memory. */
   stores?: Map<string, Store>;
+  /** After a turn, write a rubric-scored trajectory to a writable episodic module. */
+  captureEpisodes?: boolean;
 }
 
 /**
@@ -136,7 +139,51 @@ export class AgentRuntime {
       if (entry.terminal) break;
     }
 
+    if (this.opts.captureEpisodes) await this.captureEpisode(input, reply, steps);
+
     return { reply, steps };
+  }
+
+  /** First writable episodic module (learning.add) the agent has, if any. */
+  private episodicTarget() {
+    for (const grant of this.agent.accessPolicy) {
+      if (!grant.learning.add) continue;
+      const module = moduleById(this.agent, grant.memoryModuleId);
+      if (module?.kind === "episodic") return module;
+    }
+    return undefined;
+  }
+
+  /** Make one structured LLM call to score the turn against the module's rubric, then persist it. */
+  private async captureEpisode(input: string, reply: string | null, steps: CycleStep[]): Promise<void> {
+    const module = this.episodicTarget();
+    const store = module && this.stores.get(module.id);
+    if (!module || !store) return;
+    const rubric = module.rubric ?? { criteria: [], reflectionPrompts: [] };
+
+    const Schema = z.object({
+      data: z.record(z.string(), z.unknown()),
+      rubricScores: z.record(z.string(), z.unknown()).default({}),
+      reflection: z.string().default(""),
+    });
+    const request = {
+      model: this.agent.providerConfig.model,
+      system: "You record a past episode into episodic memory. Score it against the rubric and reflect honestly.",
+      messages: [{
+        role: "user" as const,
+        content:
+          `User said: ${input}\nAgent replied: ${reply ?? "(none)"}\n` +
+          `Steps: ${JSON.stringify(steps.map((s) => ({ thought: s.thought, action: s.action })))}\n` +
+          `Rubric criteria: ${JSON.stringify(rubric.criteria)}\n` +
+          `Reflection prompts: ${JSON.stringify(rubric.reflectionPrompts)}\n` +
+          `Return JSON { "data": {...the episode trajectory...}, "rubricScores": {...}, "reflection": "..." }.`,
+      }],
+    };
+    const ep = await this.provider.completeStructured(request, Schema);
+    await store.add(
+      { ...ep.data, rubricScores: ep.rubricScores },
+      { source: "runtime", body: ep.reflection ? `## Reflection\n${ep.reflection}\n` : "" },
+    );
   }
 
   /** Apply a learning (write) action, enforcing the agent's access policy. */
