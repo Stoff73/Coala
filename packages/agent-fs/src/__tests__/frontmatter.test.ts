@@ -15,6 +15,13 @@ describe("frontmatter", () => {
     expect(body).toBe("just text");
   });
 
+  it("parses frontmatter from a CRLF file", () => {
+    const src = "---\r\nid: x\r\n---\r\nbody\r\n";
+    const { data, body } = parseFrontmatter(src);
+    expect(data).toEqual({ id: "x" });
+    expect(body).toBe("body\n");
+  });
+
   it("round-trips", () => {
     const out = stringifyFrontmatter({ id: "a", n: 1 }, "Body here.");
     const { data, body } = parseFrontmatter(out);

@@ -9,6 +9,8 @@ const FM = /^---\n([\s\S]*?)\n---\n?/;
 
 /** Split a "YAML frontmatter + markdown body" string. No frontmatter → all body. */
 export function parseFrontmatter(src: string): Parsed {
+  // Normalize CRLF so Windows-edited files still parse.
+  src = src.replace(/\r\n/g, "\n");
   const m = FM.exec(src);
   if (!m) return { data: {}, body: src };
   const data = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
