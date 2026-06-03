@@ -8,6 +8,18 @@ import {
   type Record_,
 } from "./memory.js";
 import { ToolRegistry } from "./tools.js";
+
+/** Register the built-in `memory.open` tool: pull one record body by moduleId + id. */
+export function registerMemoryOpen(tools: ToolRegistry, stores: Map<string, Store>): void {
+  tools.register("memory.open", async (args) => {
+    const moduleId = String((args as Record<string, unknown>).moduleId ?? "");
+    const id = String((args as Record<string, unknown>).id ?? "");
+    const store = stores.get(moduleId);
+    if (!store) return { error: `Unknown module "${moduleId}".` };
+    const body = await store.openBody(id);
+    return body ?? { error: `No record "${id}" in "${moduleId}".` };
+  });
+}
 import { EmbeddingIndex } from "./embedding.js";
 import { ActionProposal } from "./schema.js";
 import { actionTargets, reasonRequest } from "./prompt.js";
@@ -39,6 +51,7 @@ export class AgentRuntime {
     private readonly opts: RuntimeOptions = {},
   ) {
     this.stores = opts.stores ?? buildStores(agent);
+    registerMemoryOpen(this.tools, this.stores);
     if (opts.embedder) this.embeddingIndex = new EmbeddingIndex(opts.embedder);
   }
 
