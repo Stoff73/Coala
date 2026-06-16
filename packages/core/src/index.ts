@@ -15,3 +15,6 @@ export * from "./invariants/lint.js";
 
 // Table 2 / §6 preset archetypes (PLAN §3)
 export * from "./presets/index.js";
+
+// Runtime storage contract (used by @coala/runtime and @coala/agent-fs)
+export * from "./runtime/store.js";

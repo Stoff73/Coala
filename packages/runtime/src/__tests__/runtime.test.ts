@@ -18,18 +18,18 @@ describe("InMemoryStore retrieval", () => {
     { text: "running socks", importance: 2 },
   ]);
 
-  it("recency returns the most recent first", () => {
-    const r = store.retrieve({ text: "", method: "recency", k: 2 });
+  it("recency returns the most recent first", async () => {
+    const r = await store.retrieve({ text: "", method: "recency", k: 2 });
     expect(r.map((x) => x.text)).toEqual(["running socks", "red leather boots"]);
   });
 
-  it("importance ranks by the importance field", () => {
-    const r = store.retrieve({ text: "", method: "importance", k: 1 });
+  it("importance ranks by the importance field", async () => {
+    const r = await store.retrieve({ text: "", method: "importance", k: 1 });
     expect(r[0]!.text).toBe("red leather boots");
   });
 
-  it("relevance ranks by keyword overlap", () => {
-    const r = store.retrieve({ text: "running shoes", method: "relevance", k: 2 });
+  it("relevance ranks by keyword overlap", async () => {
+    const r = await store.retrieve({ text: "running shoes", method: "relevance", k: 2 });
     expect(r[0]!.text).toBe("blue running shoes");
     expect(r.every((x) => String(x.text).includes("running"))).toBe(true);
   });
@@ -78,7 +78,7 @@ describe("AgentRuntime decision cycle", () => {
 
     // Step 2: a learning write landed in episodic memory.
     expect(result.steps[1]!.memoryWrite?.moduleId).toBe("mem-history");
-    expect(runtime.stores.get("mem-history")!.records).toHaveLength(1);
+    expect(await runtime.stores.get("mem-history")!.listPointers()).toHaveLength(1);
 
     // Step 3: terminal response.
     expect(result.steps[2]!.terminal).toBe(true);
@@ -98,7 +98,14 @@ describe("AgentRuntime decision cycle", () => {
 
     expect(result.steps[0]!.blocked).toMatch(/not writable/);
     // The read-only catalog store was not mutated.
-    expect(runtime.stores.get("mem-catalog")!.records).toHaveLength(0);
+    expect(await runtime.stores.get("mem-catalog")!.listPointers()).toHaveLength(0);
+  });
+
+  it("uses injected stores when provided", async () => {
+    const injected = new Map([["mem-history", new InMemoryStore([{ note: "seeded" }])]]);
+    const provider = scripted([JSON.stringify({ thought: "done", action: { type: "respond", message: "ok" } })]);
+    const runtime = new AgentRuntime(retailAssistantAgent, provider, new ToolRegistry(), { stores: injected });
+    expect(runtime.stores.get("mem-history")).toBe(injected.get("mem-history"));
   });
 
   it("respects maxSteps when the agent never terminates", async () => {

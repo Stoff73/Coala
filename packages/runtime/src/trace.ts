@@ -30,4 +30,6 @@ export interface CycleStep {
 export interface TurnResult {
   reply: string | null;
   steps: CycleStep[];
+  /** Set when post-turn episodic capture wrote a trajectory (captureEpisodes mode). */
+  capturedEpisode?: { moduleId: string; pointerId: string };
 }

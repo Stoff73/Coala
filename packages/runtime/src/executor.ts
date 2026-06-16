@@ -1,7 +1,8 @@
+import { z } from "zod";
 import type { Agent } from "@coala/core";
+import type { Store } from "@coala/core";
 import type { EmbeddingProvider, LLMProvider } from "@coala/providers";
 import {
-  InMemoryStore,
   WorkingMemory,
   buildStores,
   moduleById,
@@ -13,11 +14,33 @@ import { ActionProposal } from "./schema.js";
 import { actionTargets, reasonRequest } from "./prompt.js";
 import type { CycleStep, RetrievedItem, TurnResult } from "./trace.js";
 
+const EpisodeCaptureSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+  rubricScores: z.record(z.string(), z.unknown()).default({}),
+  reflection: z.string().default(""),
+});
+
+/** Register the built-in `memory.open` tool: pull one record body by moduleId + id. */
+export function registerMemoryOpen(tools: ToolRegistry, stores: Map<string, Store>): void {
+  tools.register("memory.open", async (args) => {
+    const moduleId = String((args as Record<string, unknown>).moduleId ?? "");
+    const id = String((args as Record<string, unknown>).id ?? "");
+    const store = stores.get(moduleId);
+    if (!store) return { error: `Unknown module "${moduleId}".` };
+    const body = await store.openBody(id);
+    return body ?? { error: `No record "${id}" in "${moduleId}".` };
+  });
+}
+
 export interface RuntimeOptions {
   /** Safety bound on cycles per turn (prevents runaway loops). */
   maxSteps?: number;
   /** Embedder enabling real vector ("embedding") retrieval; falls back to keyword if absent. */
   embedder?: EmbeddingProvider;
+  /** Pre-built stores (e.g. FileStore from @coala/agent-fs). Defaults to in-memory. */
+  stores?: Map<string, Store>;
+  /** After a turn, write a rubric-scored trajectory to a writable episodic module. */
+  captureEpisodes?: boolean;
 }
 
 /**
@@ -27,7 +50,7 @@ export interface RuntimeOptions {
  */
 export class AgentRuntime {
   readonly working = new WorkingMemory();
-  readonly stores: Map<string, InMemoryStore>;
+  readonly stores: Map<string, Store>;
   private readonly embeddingIndex?: EmbeddingIndex;
 
   constructor(
@@ -36,7 +59,8 @@ export class AgentRuntime {
     private readonly tools: ToolRegistry = new ToolRegistry(),
     private readonly opts: RuntimeOptions = {},
   ) {
-    this.stores = buildStores(agent);
+    this.stores = opts.stores ?? buildStores(agent);
+    registerMemoryOpen(this.tools, this.stores);
     if (opts.embedder) this.embeddingIndex = new EmbeddingIndex(opts.embedder);
   }
 
@@ -55,11 +79,18 @@ export class AgentRuntime {
       if (!store) continue;
       const method = grant.retrieval.method ?? module.retrievalConfig?.method ?? "relevance";
       const k = module.retrievalConfig?.k ?? 5;
-      // Real vector retrieval when an embedder is available; otherwise keyword fallback.
-      const records =
-        method === "embedding" && this.embeddingIndex
-          ? await this.embeddingIndex.rank(store.records, query, k)
-          : store.retrieve({ text: query, method, k });
+      let records: Record_[];
+      if (method === "embedding" && this.embeddingIndex) {
+        const pointers = await store.listPointers();
+        const winners = await this.embeddingIndex.rankPointers(pointers, query, k);
+        records = [];
+        for (const p of winners) {
+          const body = await store.openBody(p.id);
+          if (body) records.push(body);
+        }
+      } else {
+        records = await store.retrieve({ text: query, method, k });
+      }
       items.push({ moduleId: module.id, moduleName: module.name, method, records });
     }
     return items;
@@ -103,7 +134,7 @@ export class AgentRuntime {
           break;
         }
         case "learning": {
-          const write = this.applyLearning(action.memoryModuleId, action.record ?? {});
+          const write = await this.applyLearning(action.memoryModuleId, action.record ?? {});
           if (typeof write === "string") entry.blocked = write;
           else entry.memoryWrite = write;
           break;
@@ -114,18 +145,65 @@ export class AgentRuntime {
       if (entry.terminal) break;
     }
 
-    return { reply, steps };
+    let capturedEpisode: { moduleId: string; pointerId: string } | undefined;
+    if (this.opts.captureEpisodes) {
+      try {
+        capturedEpisode = await this.captureEpisode(input, reply, steps);
+      } catch (err) {
+        // Reflection is best-effort; log and swallow so the reply is never lost.
+        console.warn("[AgentRuntime] episodic capture failed (turn reply preserved):", err);
+      }
+    }
+    return { reply, steps, capturedEpisode };
+  }
+
+  /** First writable episodic module (learning.add) the agent has, if any. */
+  private episodicTarget() {
+    for (const grant of this.agent.accessPolicy) {
+      if (!grant.learning.add) continue;
+      const module = moduleById(this.agent, grant.memoryModuleId);
+      if (module?.kind === "episodic") return module;
+    }
+    return undefined;
+  }
+
+  /** Make one structured LLM call to score the turn against the module's rubric, then persist it. */
+  private async captureEpisode(input: string, reply: string | null, steps: CycleStep[]): Promise<{ moduleId: string; pointerId: string } | undefined> {
+    const module = this.episodicTarget();
+    const store = module && this.stores.get(module.id);
+    if (!module || !store) return undefined;
+    const rubric = module.rubric ?? { criteria: [], reflectionPrompts: [] };
+
+    const request = {
+      model: this.agent.providerConfig.model,
+      system: "You record a past episode into episodic memory. Score it against the rubric and reflect honestly.",
+      messages: [{
+        role: "user" as const,
+        content:
+          `User said: ${input}\nAgent replied: ${reply ?? "(none)"}\n` +
+          `Steps: ${JSON.stringify(steps.map((s) => ({ thought: s.thought, action: s.action })))}\n` +
+          `Rubric criteria: ${JSON.stringify(rubric.criteria)}\n` +
+          `Reflection prompts: ${JSON.stringify(rubric.reflectionPrompts)}\n` +
+          `Return JSON { "data": {...the episode trajectory...}, "rubricScores": {...}, "reflection": "..." }.`,
+      }],
+    };
+    const ep = await this.provider.completeStructured(request, EpisodeCaptureSchema);
+    const ptr = await store.add(
+      { ...ep.data, rubricScores: ep.rubricScores },
+      { source: "runtime", body: ep.reflection ? `## Reflection\n${ep.reflection}\n` : "" },
+    );
+    return { moduleId: module.id, pointerId: ptr.id };
   }
 
   /** Apply a learning (write) action, enforcing the agent's access policy. */
-  private applyLearning(moduleId: string | undefined, record: Record_) {
+  private async applyLearning(moduleId: string | undefined, record: Record_) {
     if (!moduleId) return "No memoryModuleId provided.";
     const grant = this.agent.accessPolicy.find((a) => a.memoryModuleId === moduleId);
     if (!grant?.learning.add) return `Module "${moduleId}" is not writable (no learning grant).`;
     const store = this.stores.get(moduleId);
     const module = moduleById(this.agent, moduleId);
     if (!store || !module) return `Module "${moduleId}" has no store.`;
-    store.add(record);
+    await store.add(record);
     return { moduleId, moduleName: module.name, record };
   }
 }
